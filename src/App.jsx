@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // ====================================================================
-// OPRAVA: Vložené komponenty a data, aby se vyřešily chyby importu
+// Vložené komponenty a data, aby se předešlo chybám
+// (Tato část zůstává beze změny)
 // ====================================================================
 
 // Mock pro překlady, dříve v './translations'
@@ -77,6 +78,8 @@ const CurrencySwitcher = ({ currency, setCurrency }) => (
 );
 
 const SeatSelection = ({ trip, onProceed, onBack, t, currency }) => {
+    // ... obsah komponenty SeatSelection ...
+    // Tento kód je v pořádku, ponecháváme ho
     const [localSelected, setLocalSelected] = useState([]);
     const toggleSeat = (id) => {
         setLocalSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -354,7 +357,8 @@ export default function App() {
 
         const headers = {
             'Content-Type': 'application/json',
-            'api-key': API_KEY, // Správný název hlavičky podle controlleru
+            // OPRAVA: Název hlavičky sjednocen na 'X-API-Key' podle backendu
+            'X-API-Key': API_KEY,
             ...options.headers,
         };
 
@@ -362,6 +366,11 @@ export default function App() {
             ...options,
             headers,
         };
+
+        // Zde odstraníme API klíč pro veřejné endpointy, aby se neposílal zbytečně
+        if (endpoint === '/api/v1/cities') {
+            delete config.headers['X-API-Key'];
+        }
 
         const response = await fetch(url, config);
 
@@ -398,21 +407,38 @@ export default function App() {
         }
     }, []);
 
+    // =================================================================
+    // ZDE JE HLAVNÍ OPRAVA PRO NAČÍTÁNÍ MĚST
+    // =================================================================
     useEffect(() => {
         const fetchCities = async () => {
             setError(null);
             try {
-                // Použití nové centrální funkce
-                const data = await apiFetch('/api/stops', { method: 'GET' });
-                // Očekáváme, že API vrátí přímo pole, pokud ne, upravte podle skutečné struktury
-                setCities(data || []);
+                // OPRAVA 1: Volání správného, veřejného endpointu pro MĚSTA
+                const data = await apiFetch('/api/v1/cities');
+
+                // OPRAVA 2: Transformace dat pro komponentu <SearchForm>
+                // Backend vrací {'cities': ['Brno', 'Praha']}, ale komponenta
+                // očekává pole objektů s id a name, např. [{id: 'Praha', name: 'Praha'}].
+                if (data && data.cities) {
+                    const formattedCities = data.cities.map(cityName => ({
+                        id: cityName, // Použijeme jméno i jako unikátní klíč/ID
+                        name: cityName
+                    }));
+                    setCities(formattedCities);
+                } else {
+                    setCities([]);
+                }
             } catch (e) {
                 console.error("Chyba při načítání měst:", e);
                 setError(`Nepodařilo se načíst seznam měst: ${e.message}`);
             }
         };
         fetchCities();
-    }, []);
+    }, []); // Prázdné pole znamená, že se efekt spustí jen jednou po načtení komponenty
+    // =================================================================
+    // KONEC HLAVNÍ OPRAVY
+    // =================================================================
 
     // --- FUNKCE PRO OVLÁDÁNÍ APLIKACE ---
     const handleSearch = async (searchParams) => {
@@ -426,7 +452,8 @@ export default function App() {
                 method: 'POST',
                 body: JSON.stringify({ params: { from_city: searchParams.from, to_city: searchParams.to, departure_date: searchParams.date } }),
             });
-            setTrips(data.result.trips || []);
+            // Správný přístup k datům vnořeným pod 'result'
+            setTrips(data.trips || []);
         } catch (e) {
             console.error("Chyba při vyhledávání:", e);
             setError(e.message);
@@ -494,7 +521,8 @@ export default function App() {
     const renderContent = () => {
         switch (view) {
             case 'seats':
-                return selectedTrip && <SeatSelection trip={selectedTrip} onProceed={handleProceedToCustomerInfo} onBack={() => setView('search')} t={t} currency={currency} />;
+                // Předání skutečné komponenty SeatSelection
+                return selectedTrip && <SeatSelection trip={selectedTrip} onProceed={handleProceedToCustomerInfo} onBack={() => setView('search')} />;
             case 'customerInfo':
                 return (
                     <div className="container mx-auto px-4 py-8">
@@ -538,7 +566,7 @@ export default function App() {
                 return (
                     <>
                         <div className="relative bg-blue-700">
-                            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1544620347-c4fd4a_d5957?q=80&w=2069&auto=format&fit=crop')", opacity: 0.2 }}></div>
+                            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop')", opacity: 0.2 }}></div>
                             <div className="relative container mx-auto px-4 pt-16 pb-24">
                                 <SearchForm onSearch={handleSearch} isLoading={loading} cities={cities} t={t} />
                                 {error && (
